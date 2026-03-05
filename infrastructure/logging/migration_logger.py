@@ -4,6 +4,7 @@ Migration Logger
 Architectural Intent:
 - Infrastructure concern for structured migration logging
 - Writes per-record outcomes to a JSONL log file
+- Includes batch metadata and summary for accurate log reconstruction
 - Separate from domain logic — consumes MigrationSummary after the fact
 """
 import json
@@ -20,9 +21,22 @@ class MigrationLogger:
         ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         self._log_path = self._log_dir / f"migration_{ts}.jsonl"
 
+    @property
+    def log_path(self) -> str:
+        return str(self._log_path)
+
     def write_summary(self, summary: MigrationSummary) -> str:
         with open(self._log_path, "w", encoding="utf-8") as f:
             for batch in summary.batches:
+                f.write(json.dumps({
+                    "type": "batch",
+                    "object_type": batch.object_type,
+                    "total": batch.total,
+                    "success_count": batch.success_count,
+                    "warning_count": batch.warning_count,
+                    "error_count": batch.error_count,
+                    "quarantined_count": batch.quarantined_count,
+                }) + "\n")
                 for result in batch.record_results:
                     f.write(json.dumps(self._result_to_dict(result)) + "\n")
 
@@ -32,6 +46,7 @@ class MigrationLogger:
                 "total_loaded": summary.total_loaded,
                 "total_quarantined": summary.total_quarantined,
                 "duration_seconds": summary.duration_seconds,
+                "warnings": list(summary.warnings),
             }) + "\n")
 
         return str(self._log_path)

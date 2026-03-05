@@ -25,6 +25,7 @@ from domain.entities.opportunity import Opportunity
 from domain.entities.activity import Activity
 from domain.ports.extractor_ports import SalesforceExtractorPort
 from domain.ports.loader_ports import NexusLoaderPort, FileExporterPort
+from domain.ports.progress_ports import ProgressEvent, ProgressPort
 from domain.services.mapping_service import MappingService
 from domain.services.transform_service import TransformService
 from domain.services.relationship_resolver import RelationshipResolver
@@ -37,6 +38,11 @@ from domain.value_objects.migration_result import (
 )
 
 
+class _NoOpProgress:
+    def on_progress(self, event: ProgressEvent) -> None:
+        pass
+
+
 @dataclass
 class MigrationWorkflow:
     config: MigrationConfig
@@ -46,6 +52,11 @@ class MigrationWorkflow:
     mapping_service: MappingService
     transform_service: TransformService
     resolver: RelationshipResolver
+    progress: ProgressPort | None = None
+
+    def __post_init__(self):
+        if self.progress is None:
+            self.progress = _NoOpProgress()
 
     async def execute(self) -> MigrationSummary:
         start = time.monotonic()
@@ -99,8 +110,16 @@ class MigrationWorkflow:
             warnings=tuple(all_warnings),
         )
 
+    def _emit(self, phase: str, object_type: str, current: int, total: int, message: str = ""):
+        self.progress.on_progress(ProgressEvent(
+            phase=phase, object_type=object_type,
+            current=current, total=total, message=message,
+        ))
+
     async def _process_accounts(self) -> BatchResult:
+        self._emit("extract", "Account", 0, 0, "Extracting accounts...")
         raw_records = await self.extractor.extract_accounts()
+        self._emit("extract", "Account", len(raw_records), len(raw_records), "Extraction complete")
         accounts: list[Account] = []
         quarantined: list[RecordResult] = []
         warnings: list[RecordResult] = []
@@ -121,9 +140,12 @@ class MigrationWorkflow:
 
         dup_warnings = self.transform_service.detect_duplicate_accounts(accounts)
         warnings.extend(dup_warnings)
+        self._emit("transform", "Account", len(accounts), len(raw_records), f"{len(accounts)} valid, {len(quarantined)} quarantined")
 
         nexus_records = [a.to_nexus_company() for a in accounts]
+        self._emit("load", "Account", 0, len(nexus_records), "Loading accounts...")
         load_results = await self._load_and_export("companies", nexus_records)
+        self._emit("complete", "Account", len(nexus_records), len(nexus_records), "Accounts done")
 
         for result in load_results:
             if result.nexus_id and result.salesforce_id:
@@ -132,7 +154,9 @@ class MigrationWorkflow:
         return self._build_batch("Account", len(raw_records), load_results, quarantined, warnings)
 
     async def _process_contacts(self) -> BatchResult:
+        self._emit("extract", "Contact", 0, 0, "Extracting contacts...")
         raw_records = await self.extractor.extract_contacts()
+        self._emit("extract", "Contact", len(raw_records), len(raw_records), "Extraction complete")
         contacts: list[Contact] = []
         quarantined: list[RecordResult] = []
         warnings: list[RecordResult] = []
@@ -153,13 +177,16 @@ class MigrationWorkflow:
 
         dup_warnings = self.transform_service.detect_duplicate_contacts(contacts)
         warnings.extend(dup_warnings)
+        self._emit("transform", "Contact", len(contacts), len(raw_records), f"{len(contacts)} valid, {len(quarantined)} quarantined")
 
         nexus_records = []
         for c in contacts:
             account_nexus_id = self.resolver.resolve(c.account_sf_id, "Contact->Account")
             nexus_records.append(c.to_nexus_contact(account_nexus_id))
 
+        self._emit("load", "Contact", 0, len(nexus_records), "Loading contacts...")
         load_results = await self._load_and_export("contacts", nexus_records)
+        self._emit("complete", "Contact", len(nexus_records), len(nexus_records), "Contacts done")
 
         for result in load_results:
             if result.nexus_id and result.salesforce_id:
@@ -168,7 +195,9 @@ class MigrationWorkflow:
         return self._build_batch("Contact", len(raw_records), load_results, quarantined, warnings)
 
     async def _process_opportunities(self) -> BatchResult:
+        self._emit("extract", "Opportunity", 0, 0, "Extracting opportunities...")
         raw_records = await self.extractor.extract_opportunities()
+        self._emit("extract", "Opportunity", len(raw_records), len(raw_records), "Extraction complete")
         opportunities: list[Opportunity] = []
         quarantined: list[RecordResult] = []
         warnings: list[RecordResult] = []
@@ -194,10 +223,13 @@ class MigrationWorkflow:
             contact_nexus_id = self.resolver.resolve(o.contact_sf_id, "Opportunity->Contact")
             nexus_records.append(o.to_nexus_deal(account_nexus_id, contact_nexus_id, stage_map))
 
+        self._emit("load", "Opportunity", 0, len(nexus_records), "Loading deals...")
         load_results = await self._load_and_export("deals", nexus_records)
+        self._emit("complete", "Opportunity", len(nexus_records), len(nexus_records), "Deals done")
         return self._build_batch("Opportunity", len(raw_records), load_results, quarantined, warnings)
 
     async def _process_activities(self) -> BatchResult:
+        self._emit("extract", "Activity", 0, 0, "Extracting tasks & events...")
         task_raw, event_raw = await asyncio.gather(
             self.extractor.extract_tasks(),
             self.extractor.extract_events(),
@@ -240,8 +272,10 @@ class MigrationWorkflow:
             contact_id = self.resolver.resolve(a.who_id, "Activity->WhoId")
             nexus_records.append(a.to_nexus_activity(related_id, contact_id))
 
+        self._emit("load", "Activity", 0, len(nexus_records), "Loading activities...")
         load_results = await self._load_and_export("activities", nexus_records)
         total_raw = len(task_raw) + len(event_raw)
+        self._emit("complete", "Activity", len(nexus_records), total_raw, "Activities done")
         return self._build_batch("Activity", total_raw, load_results, quarantined, warnings)
 
     async def _load_and_export(
