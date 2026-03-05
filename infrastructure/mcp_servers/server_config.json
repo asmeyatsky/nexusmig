@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "migration-service": {
+      "command": "python",
+      "args": ["-m", "infrastructure.mcp_servers.migration_server"],
+      "env": {
+        "SALESFORCE_USERNAME": "${SALESFORCE_USERNAME}",
+        "SALESFORCE_PASSWORD": "${SALESFORCE_PASSWORD}",
+        "NEXUS_API_KEY": "${NEXUS_API_KEY}"
+      }
+    }
+  }
+}

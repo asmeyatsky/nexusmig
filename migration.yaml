@@ -1,0 +1,52 @@
+# Salesforce -> Nexus CRM Migration Accelerator Configuration
+# See PRD Section 9 for full reference.
+
+input_mode: csv  # "api" or "csv"
+output_mode: file  # "api", "file", or "both"
+
+# Salesforce API credentials (required when input_mode: api)
+salesforce:
+  username: ""
+  password: ""
+  security_token: ""
+  domain: login  # "login" for production, "test" for sandbox
+
+# CSV file paths (required when input_mode: csv)
+csv:
+  accounts: "./data/accounts.csv"
+  contacts: "./data/contacts.csv"
+  opportunities: "./data/opportunities.csv"
+  tasks: "./data/tasks.csv"
+  events: "./data/events.csv"
+
+# Nexus CRM API (required when output_mode: api or both)
+nexus_api:
+  base_url: "https://api.nexuscrm.io"
+  api_key: ""
+  batch_size: 50
+  dry_run: false
+
+# File export settings (used when output_mode: file or both)
+file_export:
+  output_dir: "./output"
+  formats:
+    - json
+    - csv
+
+# Object scope — which Salesforce objects to migrate
+objects:
+  - accounts
+  - contacts
+  - opportunities
+  - activities
+
+# Duplicate handling: skip, overwrite, or keep_both
+duplicate_strategy: skip
+
+# Custom field overrides — map non-standard SF fields to expected names
+# Format: { "ObjectType": { "Custom_Field__c": "StandardFieldName" } }
+field_overrides: {}
+
+# Stage mapping overrides — override default Opportunity stage -> Deal stage
+# Format: { "SF Stage Name": "Nexus Stage Name" }
+stage_overrides: {}
