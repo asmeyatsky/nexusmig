@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nexus Migration Accelerator</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div>
+    <h1>Nexus Migration Accelerator</h1>
+    <div class="subtitle">Salesforce &rarr; Nexus CRM</div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" data-tab="migrate">New Migration</button>
+    <button class="tab" data-tab="history">Run History</button>
+  </div>
+
+  <!-- ═══════════ MIGRATE TAB ═══════════ -->
+  <div id="panel-migrate" class="tab-panel active">
+
+    <!-- Wizard steps indicator -->
+    <div class="wizard-steps">
+      <div class="wizard-step active">
+        <span class="step-num">1</span> Source
+      </div>
+      <div class="wizard-step">
+        <span class="step-num">2</span> Objects
+      </div>
+      <div class="wizard-step">
+        <span class="step-num">3</span> Destination
+      </div>
+      <div class="wizard-step">
+        <span class="step-num">4</span> Review
+      </div>
+      <div class="wizard-step">
+        <span class="step-num">5</span> Run
+      </div>
+    </div>
+
+    <!-- ── Step 1: Source ── -->
+    <div class="step-panel active">
+      <div class="card">
+        <h3>Data Source</h3>
+        <div class="form-group">
+          <label>Input Mode</label>
+          <div class="checkbox-group">
+            <label>
+              <input type="radio" name="input_mode" value="csv" checked onchange="setInputMode('csv')"> CSV Files
+            </label>
+            <label>
+              <input type="radio" name="input_mode" value="api" onchange="setInputMode('api')"> Salesforce API
+            </label>
+          </div>
+        </div>
+
+        <!-- CSV upload -->
+        <div id="csv-upload-fields">
+          <p style="font-size:0.85rem;color:var(--gray-600);margin-bottom:1rem">
+            Upload Salesforce CSV exports. At minimum, upload Accounts to begin.
+          </p>
+          <div class="form-row">
+            <div>
+              <label class="upload-zone" onclick="this.querySelector('input').click()">
+                <input type="file" accept=".csv" style="display:none" onchange="uploadFile('accounts', this)">
+                <span class="upload-label">Accounts.csv</span>
+              </label>
+            </div>
+            <div>
+              <label class="upload-zone" onclick="this.querySelector('input').click()">
+                <input type="file" accept=".csv" style="display:none" onchange="uploadFile('contacts', this)">
+                <span class="upload-label">Contacts.csv</span>
+              </label>
+            </div>
+          </div>
+          <div class="form-row">
+            <div>
+              <label class="upload-zone" onclick="this.querySelector('input').click()">
+                <input type="file" accept=".csv" style="display:none" onchange="uploadFile('opportunities', this)">
+                <span class="upload-label">Opportunities.csv</span>
+              </label>
+            </div>
+            <div>
+              <label class="upload-zone" onclick="this.querySelector('input').click()">
+                <input type="file" accept=".csv" style="display:none" onchange="uploadFile('tasks', this)">
+                <span class="upload-label">Tasks.csv</span>
+              </label>
+              <label class="upload-zone" onclick="this.querySelector('input').click()" style="margin-top:0.5rem">
+                <input type="file" accept=".csv" style="display:none" onchange="uploadFile('events', this)">
+                <span class="upload-label">Events.csv</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Salesforce API -->
+        <div id="sf-api-fields" style="display:none">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Username</label>
+              <input type="text" id="sf-username" placeholder="admin@company.com">
+            </div>
+            <div class="form-group">
+              <label>Password</label>
+              <input type="password" id="sf-password">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Security Token</label>
+              <input type="password" id="sf-token">
+            </div>
+            <div class="form-group">
+              <label>Environment</label>
+              <select id="sf-domain">
+                <option value="login">Production</option>
+                <option value="test">Sandbox</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="btn-group">
+        <button class="btn btn-primary" onclick="nextStep()">Next: Select Objects</button>
+      </div>
+    </div>
+
+    <!-- ── Step 2: Objects ── -->
+    <div class="step-panel">
+      <div class="card">
+        <h3>Objects to Migrate</h3>
+        <p style="font-size:0.85rem;color:var(--gray-600);margin-bottom:1rem">
+          Select which Salesforce objects to include in this migration run.
+        </p>
+        <div class="checkbox-group" style="flex-direction:column;gap:0.75rem">
+          <label style="font-size:1rem">
+            <input type="checkbox" checked onchange="toggleObject('accounts')">
+            <strong>Accounts</strong> &rarr; Nexus Companies
+          </label>
+          <label style="font-size:1rem">
+            <input type="checkbox" checked onchange="toggleObject('contacts')">
+            <strong>Contacts</strong> &rarr; Nexus Contacts
+          </label>
+          <label style="font-size:1rem">
+            <input type="checkbox" checked onchange="toggleObject('opportunities')">
+            <strong>Opportunities</strong> &rarr; Nexus Deals
+          </label>
+          <label style="font-size:1rem">
+            <input type="checkbox" checked onchange="toggleObject('activities')">
+            <strong>Tasks &amp; Events</strong> &rarr; Nexus Activities
+          </label>
+        </div>
+
+        <div class="form-group" style="margin-top:1.5rem">
+          <label>Duplicate Handling</label>
+          <select id="dup-strategy">
+            <option value="skip">Skip duplicates</option>
+            <option value="overwrite">Overwrite existing</option>
+            <option value="keep_both">Keep both</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="btn-group">
+        <button class="btn btn-secondary" onclick="prevStep()">Back</button>
+        <button class="btn btn-primary" onclick="nextStep()">Next: Destination</button>
+      </div>
+    </div>
+
+    <!-- ── Step 3: Destination ── -->
+    <div class="step-panel">
+      <div class="card">
+        <h3>Output Destination</h3>
+        <div class="form-group">
+          <label>Output Mode</label>
+          <div class="checkbox-group">
+            <label>
+              <input type="radio" name="output_mode" value="file" checked onchange="setOutputMode('file')">
+              File Export (JSON + CSV)
+            </label>
+            <label>
+              <input type="radio" name="output_mode" value="api" onchange="setOutputMode('api')">
+              Nexus API Push
+            </label>
+            <label>
+              <input type="radio" name="output_mode" value="both" onchange="setOutputMode('both')">
+              Both (recommended)
+            </label>
+          </div>
+        </div>
+
+        <div id="nexus-api-fields" style="display:none">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Nexus API Base URL</label>
+              <input type="url" id="nexus-url" placeholder="https://api.nexuscrm.io">
+            </div>
+            <div class="form-group">
+              <label>API Key</label>
+              <input type="password" id="nexus-key">
+            </div>
+          </div>
+          <div class="form-group" style="max-width:200px">
+            <label>Batch Size</label>
+            <input type="number" id="nexus-batch" value="50" min="1" max="200">
+          </div>
+        </div>
+      </div>
+
+      <div class="btn-group">
+        <button class="btn btn-secondary" onclick="prevStep()">Back</button>
+        <button class="btn btn-primary" onclick="nextStep()">Next: Review</button>
+      </div>
+    </div>
+
+    <!-- ── Step 4: Review ── -->
+    <div class="step-panel">
+      <div class="card">
+        <h3>Review Configuration</h3>
+        <div id="review-content" class="review-section"></div>
+      </div>
+
+      <div class="btn-group">
+        <button class="btn btn-secondary" onclick="prevStep()">Back</button>
+        <button class="btn btn-secondary" onclick="startMigration(true)">Dry Run</button>
+        <button class="btn btn-success" onclick="startMigration(false)">Start Migration</button>
+      </div>
+    </div>
+
+    <!-- ── Step 5: Progress & Results ── -->
+    <div class="step-panel">
+      <div class="card">
+        <h3 id="progress-status">Starting migration...</h3>
+        <div class="progress-container">
+          <div class="progress-bar-outer">
+            <div class="progress-bar-inner" id="progress-bar"></div>
+          </div>
+        </div>
+        <div class="progress-log" id="progress-log"></div>
+      </div>
+
+      <div id="result-section" style="display:none">
+        <div class="card">
+          <h3>Results</h3>
+          <div class="stat-grid">
+            <div class="stat-card">
+              <div class="value" id="stat-extracted">-</div>
+              <div class="label">Extracted</div>
+            </div>
+            <div class="stat-card success">
+              <div class="value" id="stat-loaded">-</div>
+              <div class="label">Loaded</div>
+            </div>
+            <div class="stat-card" id="stat-quarantined-card">
+              <div class="value" id="stat-quarantined">-</div>
+              <div class="label">Quarantined</div>
+            </div>
+            <div class="stat-card">
+              <div class="value" id="stat-duration">-</div>
+              <div class="label">Duration</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="btn-group" id="result-actions" style="display:none">
+          <button class="btn btn-primary" id="btn-view-report">View Full Report</button>
+          <button class="btn btn-secondary" onclick="goToStep(0)">Run Another Migration</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════ HISTORY TAB ═══════════ -->
+  <div id="panel-history" class="tab-panel">
+    <div class="card">
+      <h3>Migration Run History</h3>
+      <table class="history-table">
+        <thead>
+          <tr>
+            <th>Timestamp</th>
+            <th>Input</th>
+            <th>Extracted</th>
+            <th>Loaded</th>
+            <th>Quarantined</th>
+            <th>Duration</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="history-body">
+          <tr><td colspan="7" style="text-align:center;color:var(--gray-600)">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
